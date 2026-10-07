@@ -70,3 +70,64 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "mariadb-connector-c ${{ env.MARIADB_CONNECTOR }} (OpenBSD ${{ env.OPENBSD }})" \
             --notes "https://github.com/mariadb-corporation/mariadb-connector-c/tree/v${{ env.MARIADB_CONNECTOR }} ($(git rev-parse HEAD))"
+
+  mariadb-connector-c-pkg:
+    needs: mariadb-connector-c
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: cpa.sh {0}
+    steps:
+      - name: Check for an existing package
+        id: check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=mariadb-connector-c-${{ env.MARIADB_CONNECTOR }}-openbsd-${{ env.OPENBSD }}
+          n=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '[.assets[].name | select(endswith(".tgz"))] | length')
+          if [ "$n" -gt 0 ]; then
+            echo "package for $tag exists, skipping"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.check.outputs.exists != 'true'
+        with:
+          persist-credentials: false
+
+      - uses: cross-platform-actions/action@v1.6.0
+        if: steps.check.outputs.exists != 'true'
+        with:
+          operating_system: openbsd
+          architecture: x86-64
+          version: ${{ env.OPENBSD }}
+
+      - name: Build package
+        if: steps.check.outputs.exists != 'true'
+        run: |
+          ws=$PWD
+          sudo pkg_add cmake ninja
+          url=$(cat /etc/installurl)/$(uname -r)
+          cd /tmp
+          ftp -o ports.tar.gz $url/ports.tar.gz
+          ftp -o SHA256.sig $url/SHA256.sig
+          signify -Cp /etc/signify/openbsd-$(uname -r | cut -c 1,3)-base.pub -x SHA256.sig ports.tar.gz
+          sudo tar xzf ports.tar.gz -C /usr
+          sudo mkdir -p /usr/ports/mystuff
+          sudo cp -R $ws/ports/. /usr/ports/mystuff/
+          cd /usr/ports/mystuff/databases/mariadb-connector-c
+          [ -f distinfo ] || { sudo make makesum; cat distinfo; }
+          sudo make package
+          cp /usr/ports/packages/amd64/all/mariadb-connector-c-*.tgz $ws/
+
+      - name: Release
+        if: steps.check.outputs.exists != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload mariadb-connector-c-${{ env.MARIADB_CONNECTOR }}-openbsd-${{ env.OPENBSD }} \
+            mariadb-connector-c-*.tgz --repo "$GITHUB_REPOSITORY"
