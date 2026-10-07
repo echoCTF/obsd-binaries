@@ -1,0 +1,72 @@
+name: libs
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/libs.yml"]
+
+permissions:
+  contents: read
+
+env:
+  MARIADB_CONNECTOR: "3.4.11"
+  OPENBSD: "7.9"
+
+jobs:
+  mariadb-connector-c:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: cpa.sh {0}
+    steps:
+      - name: Check for an existing release
+        id: check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=mariadb-connector-c-${{ env.MARIADB_CONNECTOR }}-openbsd-${{ env.OPENBSD }}
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "release $tag exists, skipping"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.check.outputs.exists != 'true'
+        with:
+          repository: mariadb-corporation/mariadb-connector-c
+          ref: v${{ env.MARIADB_CONNECTOR }}
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: cross-platform-actions/action@v1.6.0
+        if: steps.check.outputs.exists != 'true'
+        with:
+          operating_system: openbsd
+          architecture: x86-64
+          version: ${{ env.OPENBSD }}
+
+      - name: Build
+        if: steps.check.outputs.exists != 'true'
+        run: |
+          sudo pkg_add cmake gmake
+          sed -i 's/Werror/w/g' CMakeLists.txt
+          cmake . -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_C_FLAGS="-Wall"
+          gmake
+          sudo gmake install DESTDIR=/tmp/stage
+          sudo tar czf mariadb-connector-c-${{ env.MARIADB_CONNECTOR }}-openbsd-${{ env.OPENBSD }}-amd64.tar.gz -C /tmp/stage usr
+
+      - name: Release
+        if: steps.check.outputs.exists != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create mariadb-connector-c-${{ env.MARIADB_CONNECTOR }}-openbsd-${{ env.OPENBSD }} \
+            mariadb-connector-c-${{ env.MARIADB_CONNECTOR }}-openbsd-${{ env.OPENBSD }}-amd64.tar.gz \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "mariadb-connector-c ${{ env.MARIADB_CONNECTOR }} (OpenBSD ${{ env.OPENBSD }})" \
+            --notes "https://github.com/mariadb-corporation/mariadb-connector-c/tree/v${{ env.MARIADB_CONNECTOR }} ($(git rev-parse HEAD))"
