@@ -13,6 +13,8 @@ jobs:
   build:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -36,14 +38,20 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build for OpenBSD amd64
+      - name: Build and release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          tag=${{ matrix.name }}-${{ matrix.version }}
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "release $tag exists, skipping"
+            exit 0
+          fi
           CGO_ENABLED=0 GOOS=openbsd GOARCH=amd64 go build -trimpath \
             -ldflags "-s -w -X github.com/prometheus/common/version.Version=${{ matrix.version }} -X github.com/prometheus/common/version.Revision=$(git rev-parse HEAD)" \
             -o ${{ matrix.name }}-openbsd-amd64 ${{ matrix.package }}
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.name }}-openbsd-amd64
-          path: ${{ matrix.name }}-openbsd-amd64
-          if-no-files-found: error
+          zip ${{ matrix.name }}-openbsd-amd64.zip ${{ matrix.name }}-openbsd-amd64
+          gh release create "$tag" ${{ matrix.name }}-openbsd-amd64.zip \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "${{ matrix.name }} ${{ matrix.version }}" \
+            --notes "https://github.com/${{ matrix.repo }}/tree/v${{ matrix.version }} ($(git rev-parse HEAD))"
