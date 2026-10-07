@@ -1,0 +1,4 @@
+MariaDB Connector/C is a client library for connecting applications
+written in C to MariaDB and MySQL servers. It provides the MySQL
+compatible C API, a set of client authentication plugins and the
+mariadb_config_cc tool that prints the compiler and linker flags.

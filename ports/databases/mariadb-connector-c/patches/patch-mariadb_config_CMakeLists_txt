@@ -1,0 +1,11 @@
+Index: mariadb_config/CMakeLists.txt
+--- mariadb_config/CMakeLists.txt.orig
++++ mariadb_config/CMakeLists.txt
+@@ -51,6 +51,7 @@
+                ${CMAKE_CURRENT_BINARY_DIR}/libmariadb.pc @ONLY)
+ 
+ ADD_EXECUTABLE(mariadb_config ${CMAKE_CURRENT_BINARY_DIR}/mariadb_config.c)
++SET_TARGET_PROPERTIES(mariadb_config PROPERTIES OUTPUT_NAME mariadb_config_cc)
+ 
+ IF(CMAKE_SYSTEM_NAME MATCHES AIX)
+   TARGET_LINK_LIBRARIES(mariadb_config compat-getopt)
