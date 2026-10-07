@@ -1,0 +1,49 @@
+name: go
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [".github/workflows/go.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: mysqld_exporter
+            repo: prometheus/mysqld_exporter
+            version: "0.20.0"
+            package: .
+          - name: memcached_exporter
+            repo: prometheus/memcached_exporter
+            version: "0.17.0"
+            package: ./cmd/memcached_exporter
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ matrix.repo }}
+          ref: v${{ matrix.version }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Build for OpenBSD amd64
+        run: |
+          CGO_ENABLED=0 GOOS=openbsd GOARCH=amd64 go build -trimpath \
+            -ldflags "-s -w -X github.com/prometheus/common/version.Version=${{ matrix.version }} -X github.com/prometheus/common/version.Revision=$(git rev-parse HEAD)" \
+            -o ${{ matrix.name }}-openbsd-amd64 ${{ matrix.package }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.name }}-openbsd-amd64
+          path: ${{ matrix.name }}-openbsd-amd64
+          if-no-files-found: error
