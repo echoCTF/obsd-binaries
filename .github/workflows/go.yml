@@ -2,9 +2,20 @@ name: go
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: [".github/workflows/go.yml"]
+    inputs:
+      package:
+        description: "Package to build"
+        required: true
+        default: mysqld_exporter
+        type: choice
+        options:
+          - mysqld_exporter
+          - memcached_exporter
+      version:
+        description: "Version to build (git tag without the leading v)"
+        required: true
+        default: "0.20.0"
+        type: string
 
 permissions:
   contents: read
@@ -12,21 +23,17 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: mysqld_exporter
-            repo: prometheus/mysqld_exporter
-            version: "0.20.0"
-            package: .
-          - name: memcached_exporter
-            repo: prometheus/memcached_exporter
-            version: "0.17.0"
-            package: ./cmd/memcached_exporter
+          - name: ${{ inputs.package }}
+            repo: prometheus/${{ inputs.package }}
+            version: ${{ inputs.version }}
+            package: ${{ inputs.package == 'memcached_exporter' && './cmd/memcached_exporter' || '.' }}
     steps:
       - uses: actions/checkout@v7
         with:
