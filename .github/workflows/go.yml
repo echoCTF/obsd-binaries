@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: "Package to build"
+        description: "Package to build (last: mysqld_exporter 0.20.0, memcached_exporter 0.17.0)"
         required: true
         default: mysqld_exporter
         type: choice
