@@ -2,6 +2,12 @@ name: libs
 
 on:
   workflow_dispatch:
+    inputs:
+      mariadb_connector:
+        description: "mariadb-connector-c version to build (git tag without the leading v)"
+        required: false
+        default: "3.4.11"
+        type: string
   push:
     branches: [main]
     paths: [".github/workflows/libs.yml"]
@@ -10,7 +16,7 @@ permissions:
   contents: read
 
 env:
-  MARIADB_CONNECTOR: "3.4.11"
+  MARIADB_CONNECTOR: ${{ inputs.mariadb_connector || '3.4.11' }}
   OPENBSD: "7.9"
 
 jobs:
