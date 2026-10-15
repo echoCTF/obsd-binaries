@@ -4,13 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: "Package to build (last: mysqld_exporter 0.20.0, memcached_exporter 0.17.0)"
+        description: "Package to build (last: mysqld_exporter 0.20.0, memcached_exporter 0.17.0, nginx-prometheus-exporter 1.5.3)"
         required: true
         default: mysqld_exporter
         type: choice
         options:
           - mysqld_exporter
           - memcached_exporter
+          - nginx-prometheus-exporter
       version:
         description: "Version to build (git tag without the leading v)"
         required: true
@@ -31,7 +32,7 @@ jobs:
       matrix:
         include:
           - name: ${{ inputs.package }}
-            repo: prometheus/${{ inputs.package }}
+            repo: ${{ inputs.package == 'nginx-prometheus-exporter' && 'nginx' || 'prometheus' }}/${{ inputs.package }}
             version: ${{ inputs.version }}
             package: ${{ inputs.package == 'memcached_exporter' && './cmd/memcached_exporter' || '.' }}
     steps:
