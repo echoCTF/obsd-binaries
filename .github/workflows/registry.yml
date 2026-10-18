@@ -1,0 +1,48 @@
+name: registry
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "distribution/distribution commit to build (full hash)"
+        required: true
+        default: "90939f1173f65356e724f398793b4d7239a49595"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: registry
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          repository: distribution/distribution
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+
+      - name: Build and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          tag=registry-$(git rev-parse --short=7 HEAD)
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "release $tag exists, skipping"
+            exit 0
+          fi
+          CGO_ENABLED=0 GOOS=openbsd GOARCH=amd64 go build -trimpath -ldflags "-s -w" \
+            -o registry-openbsd-amd64 ./cmd/registry
+          zip registry-openbsd-amd64.zip registry-openbsd-amd64
+          gh release create "$tag" registry-openbsd-amd64.zip \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "registry $(git rev-parse --short=7 HEAD)" \
+            --notes "https://github.com/distribution/distribution/tree/$sha"
