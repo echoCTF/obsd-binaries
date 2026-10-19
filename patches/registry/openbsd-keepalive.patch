@@ -2,8 +2,7 @@ diff --git a/registry/listener/listener.go b/registry/listener/listener.go
 index 5142f35..466fc62 100644
 --- a/registry/listener/listener.go
 +++ b/registry/listener/listener.go
-@@ -24,14 +24,8 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
- 	if err != nil {
+@@ -25,12 +25,6 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
  		return
  	}
 -	err = tc.SetKeepAlive(true)
@@ -18,3 +17,4 @@ index 5142f35..466fc62 100644
 +	_ = tc.SetKeepAlivePeriod(3 * time.Minute)
  	return tc, nil
  }
+ 
