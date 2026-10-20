@@ -4,6 +4,8 @@ GH_ACCOUNT =		mariadb-corporation
 GH_PROJECT =		mariadb-connector-c
 GH_TAGNAME =		v3.4.11
 
+REVISION =		0
+
 SHARED_LIBS =		mariadb 3.0
 
 CATEGORIES =		databases
@@ -22,5 +24,9 @@ CONFIGURE_ARGS =	-DCMAKE_INSTALL_PREFIX="${PREFIX}" \
 			-DCMAKE_C_FLAGS="-Wall"
 
 NO_TEST =		Yes
+
+post-install:
+	rm -r ${PREFIX}/man/man3
+	rm ${PREFIX}/lib/pkgconfig/libmariadb.pc
 
 .include <bsd.port.mk>
