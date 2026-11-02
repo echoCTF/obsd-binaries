@@ -1,0 +1,25 @@
+Index: memcached.c
+--- memcached.c.orig
++++ memcached.c
+@@ -1973,8 +1973,8 @@
+ #endif
+ #ifdef TLS
+     APPEND_STAT("ssl_enabled", "%s", settings.ssl_enabled ? "yes" : "no");
+-    APPEND_STAT("ssl_chain_cert", "%s", settings.ssl_chain_cert);
+-    APPEND_STAT("ssl_key", "%s", settings.ssl_key);
++    APPEND_STAT("ssl_chain_cert", "%s", settings.ssl_chain_cert ? settings.ssl_chain_cert : "NULL");
++    APPEND_STAT("ssl_key", "%s", settings.ssl_key ? settings.ssl_key : "NULL");
+     APPEND_STAT("ssl_verify_mode", "%d", settings.ssl_verify_mode);
+     APPEND_STAT("ssl_keyformat", "%d", settings.ssl_keyformat);
+     APPEND_STAT("ssl_ciphers", "%s", settings.ssl_ciphers ? settings.ssl_ciphers : "NULL");
+@@ -5554,8 +5554,8 @@
+                 start_lru_maintainer = false;
+                 break;
+             case NO_DROP_PRIVILEGES:
+-                settings.drop_privileges = false;
+-                break;
++		fprintf(stderr, "no_drop_privileges option unsupported on this operating system.\n");
++		return 1;
+             case DROP_PRIVILEGES:
+                 settings.drop_privileges = true;
+                 break;
