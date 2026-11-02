@@ -1,0 +1,10 @@
+MariaDB/MySQL user defined functions (UDFs) that talk to memcached
+servers through libmemcached. They let SQL statements and triggers
+get, set, delete, increment and manage keys on memcached.
+
+This is the echoCTF fork, which fixes memory corruption and leaks,
+adds memc_mset(), memc_server_list(), memc_server_remove() and returns
+NULL on NULL keys.
+
+Load the functions with:
+  mysql < /usr/local/share/memcached_functions_mysql/install_functions.sql

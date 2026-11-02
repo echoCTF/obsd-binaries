@@ -1,0 +1,26 @@
+lib/mysql/
+lib/mysql/plugin/
+@so lib/mysql/plugin/libmemcached_functions_mysql.so
+@man man/man3/memc_append.3
+@man man/man3/memc_behavior_get.3
+@man man/man3/memc_behavior_set.3
+@man man/man3/memc_decrement.3
+@man man/man3/memc_get.3
+@man man/man3/memc_increment.3
+@man man/man3/memc_libmemcached_version.3
+@man man/man3/memc_list_behaviors.3
+@man man/man3/memc_list_distribution_types.3
+@man man/man3/memc_list_hash_types.3
+@man man/man3/memc_prepend.3
+@man man/man3/memc_servers_behavior_get.3
+@man man/man3/memc_servers_behavior_set.3
+@man man/man3/memc_servers_set.3
+@man man/man3/memc_set.3
+@man man/man3/memc_stat_get_keys.3
+@man man/man3/memc_stats.3
+@man man/man3/memc_udf_version.3
+share/memcached_functions_mysql/
+share/memcached_functions_mysql/install.pl
+share/memcached_functions_mysql/install_functions.sql
+share/memcached_functions_mysql/memc_udf_test_report.sql
+share/memcached_functions_mysql/trigger_fun.sql

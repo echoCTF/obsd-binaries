@@ -1,0 +1,94 @@
+name: memcached_functions_mysql
+
+on:
+  workflow_dispatch:
+    inputs:
+      openbsd:
+        description: "OpenBSD release to build ports/databases/memcached_functions_mysql for (last: 1.1.20261102)"
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - "7.9"
+          - "8.0"
+
+permissions:
+  contents: read
+
+jobs:
+  memcached_functions_mysql-pkg:
+    name: memcached_functions_mysql (OpenBSD ${{ matrix.openbsd }})
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        openbsd: ${{ fromJSON(inputs.openbsd == 'all' && '["7.9", "8.0"]' || format('["{0}"]', inputs.openbsd)) }}
+    defaults:
+      run:
+        shell: cpa.sh {0}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check for an existing release
+        id: check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mk=ports/databases/memcached_functions_mysql/Makefile
+          v=$(awk '/^DISTNAME[ \t]*=/ {sub(/^memcached_functions_mysql-/, "", $3); print $3}' $mk)
+          r=$(awk '/^REVISION[ \t]*=/ {print $3}' $mk)
+          [ -n "$r" ] && v="${v}p${r}"
+          tag=memcached_functions_mysql-$v-openbsd-${{ matrix.openbsd }}
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "asset=$tag-amd64.tgz" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "release $tag exists, skipping"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: cross-platform-actions/action@v1.7.0
+        if: steps.check.outputs.exists != 'true'
+        with:
+          operating_system: openbsd
+          architecture: x86-64
+          version: ${{ matrix.openbsd }}
+
+      - name: Build package
+        if: steps.check.outputs.exists != 'true'
+        run: |
+          set -e
+          ws=$PWD
+          sudo pkg_add autoconf%2.72 automake%1.17 metaauto libtool gmake libmemcached mariadb-client
+          url=$(cat /etc/installurl)/$(uname -r)
+          cd /tmp
+          ftp -o ports.tar.gz $url/ports.tar.gz
+          ftp -o SHA256.sig $url/SHA256.sig
+          signify -Cp /etc/signify/openbsd-$(uname -r | cut -c 1,3)-base.pub -x SHA256.sig ports.tar.gz
+          sudo tar xzf ports.tar.gz -C /usr
+          sudo mkdir -p /usr/ports/mystuff/databases
+          sudo rm -rf /usr/ports/mystuff/databases/memcached_functions_mysql
+          sudo cp -R $ws/ports/databases/memcached_functions_mysql /usr/ports/mystuff/databases/
+          cd /usr/ports/mystuff/databases/memcached_functions_mysql
+          [ -f distinfo ] || { sudo make makesum; cat distinfo; }
+          sudo make package
+          cp /usr/ports/packages/amd64/all/memcached_functions_mysql-${{ steps.check.outputs.version }}.tgz \
+            $ws/${{ steps.check.outputs.asset }}
+          ls -l $ws/${{ steps.check.outputs.asset }}
+
+      - name: Release
+        if: steps.check.outputs.exists != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.check.outputs.tag }}" ${{ steps.check.outputs.asset }} \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "memcached_functions_mysql ${{ steps.check.outputs.version }} (OpenBSD ${{ matrix.openbsd }})" \
+            --notes "Built from ports/databases/memcached_functions_mysql at $GITHUB_SHA. Install with: pkg_add -D unsigned ./${{ steps.check.outputs.asset }}"
