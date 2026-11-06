@@ -1,5 +1,4 @@
 name: mariadb-connector-c
-name: libs
 
 on:
   workflow_dispatch:
