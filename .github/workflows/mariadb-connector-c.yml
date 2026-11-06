@@ -9,7 +9,7 @@ on:
         default: "3.4.11"
         type: string
       revision:
-        description: "Package REVISION (pN suffix) for the port build. Leave empty to use the REVISION from the port Makefile."
+        description: "REVISION (pN suffix) used in both release tags and the package name. Leave empty to use the REVISION from the port Makefile."
         required: false
         default: ""
         type: string
@@ -35,8 +35,27 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_REVISION: ${{ inputs.revision }}
         run: |
-          tag=mariadb-connector-c-${{ env.MARIADB_CONNECTOR }}-openbsd-${{ env.OPENBSD }}
+          # Same revision as the package job: the input, or else the REVISION
+          # from the port Makefile. Read through the API because this job
+          # checks out the upstream repo, not ours.
+          r=$INPUT_REVISION
+          if [ -n "$r" ]; then
+            if ! [[ "$r" =~ ^[0-9]+$ ]]; then
+              echo "revision must be a non-negative integer, got: $r" >&2
+              exit 1
+            fi
+          else
+            r=$(gh api "repos/$GITHUB_REPOSITORY/contents/ports/databases/mariadb-connector-c/Makefile?ref=$GITHUB_SHA" \
+                  -H "Accept: application/vnd.github.raw" | awk '/^REVISION[ \t]*=/ {print $3}')
+          fi
+          v=${{ env.MARIADB_CONNECTOR }}
+          [ -n "$r" ] && v="${v}p${r}"
+          tag=mariadb-connector-c-$v-openbsd-${{ env.OPENBSD }}
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "asset=$tag-amd64.tar.gz" >> "$GITHUB_OUTPUT"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             echo "release $tag exists, skipping"
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -65,7 +84,7 @@ jobs:
           cmake . -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local -DCMAKE_C_FLAGS="-Wall"
           gmake
           sudo gmake install DESTDIR=/tmp/stage
-          sudo tar czf mariadb-connector-c-${{ env.MARIADB_CONNECTOR }}-openbsd-${{ env.OPENBSD }}-amd64.tar.gz -C /tmp/stage usr
+          sudo tar czf ${{ steps.check.outputs.asset }} -C /tmp/stage usr
 
       - name: Release
         if: steps.check.outputs.exists != 'true'
@@ -73,10 +92,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create mariadb-connector-c-${{ env.MARIADB_CONNECTOR }}-openbsd-${{ env.OPENBSD }} \
-            mariadb-connector-c-${{ env.MARIADB_CONNECTOR }}-openbsd-${{ env.OPENBSD }}-amd64.tar.gz \
+          gh release create "${{ steps.check.outputs.tag }}" ${{ steps.check.outputs.asset }} \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-            --title "mariadb-connector-c ${{ env.MARIADB_CONNECTOR }} (OpenBSD ${{ env.OPENBSD }})" \
+            --title "mariadb-connector-c ${{ steps.check.outputs.version }} (OpenBSD ${{ env.OPENBSD }})" \
             --notes "https://github.com/mariadb-corporation/mariadb-connector-c/tree/v${{ env.MARIADB_CONNECTOR }} ($(git rev-parse HEAD))"
 
   # The package gets its own release, versioned from the port Makefile
