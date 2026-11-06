@@ -1,12 +1,17 @@
-name: libs
+name: mariadb-connector-c
 
 on:
   workflow_dispatch:
     inputs:
       mariadb_connector:
-        description: "mariadb-connector-c version to build (git tag without the leading v)"
+        description: "mariadb-connector-c version for the source tarball build (git tag without the leading v)"
         required: false
         default: "3.4.11"
+        type: string
+      revision:
+        description: "Package REVISION (pN suffix) for the port build. Leave empty to use the REVISION from the port Makefile."
+        required: false
+        default: ""
         type: string
 
 permissions:
@@ -74,8 +79,10 @@ jobs:
             --title "mariadb-connector-c ${{ env.MARIADB_CONNECTOR }} (OpenBSD ${{ env.OPENBSD }})" \
             --notes "https://github.com/mariadb-corporation/mariadb-connector-c/tree/v${{ env.MARIADB_CONNECTOR }} ($(git rev-parse HEAD))"
 
+  # The package gets its own release, versioned from the port Makefile
+  # (GH_TAGNAME + REVISION), so it never has to upload into the tarball's
+  # release and a new revision always gets a fresh tag.
   mariadb-connector-c-pkg:
-    needs: mariadb-connector-c
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -83,23 +90,39 @@ jobs:
       run:
         shell: cpa.sh {0}
     steps:
-      - name: Check for an existing package
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check for an existing release
         id: check
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_REVISION: ${{ inputs.revision }}
         run: |
-          tag=mariadb-connector-c-${{ env.MARIADB_CONNECTOR }}-openbsd-${{ env.OPENBSD }}
-          n=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '[.assets[].name | select(endswith(".tgz"))] | length')
-          if [ "$n" -gt 0 ]; then
-            echo "package for $tag exists, skipping"
+          mk=ports/databases/mariadb-connector-c/Makefile
+          v=$(awk '/^GH_TAGNAME[ \t]*=/ {sub(/^v/, "", $3); print $3}' $mk)
+          r=$(awk '/^REVISION[ \t]*=/ {print $3}' $mk)
+          if [ -n "$INPUT_REVISION" ]; then
+            if ! [[ "$INPUT_REVISION" =~ ^[0-9]+$ ]]; then
+              echo "revision must be a non-negative integer, got: $INPUT_REVISION" >&2
+              exit 1
+            fi
+            r=$INPUT_REVISION
+          fi
+          [ -n "$r" ] && v="${v}p${r}"
+          tag=mariadb-connector-c-$v-openbsd-${{ env.OPENBSD }}-pkg
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "revision=$r" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          # Must match the package's own name, or pkg_add fails with
+          # "Package name is not consistent".
+          echo "asset=mariadb-connector-c-$v.tgz" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "release $tag exists, skipping"
             echo "exists=true" >> "$GITHUB_OUTPUT"
           fi
-
-      - uses: actions/checkout@v7
-        if: steps.check.outputs.exists != 'true'
-        with:
-          persist-credentials: false
 
       - uses: cross-platform-actions/action@v1.6.0
         if: steps.check.outputs.exists != 'true'
@@ -111,7 +134,11 @@ jobs:
       - name: Build package
         if: steps.check.outputs.exists != 'true'
         run: |
+          set -e
           ws=$PWD
+          rev="${{ steps.check.outputs.revision }}"
+          mkargs=""
+          [ -n "$rev" ] && mkargs="REVISION=$rev"
           sudo pkg_add cmake ninja
           url=$(cat /etc/installurl)/$(uname -r)
           cd /tmp
@@ -123,8 +150,9 @@ jobs:
           sudo cp -R $ws/ports/. /usr/ports/mystuff/
           cd /usr/ports/mystuff/databases/mariadb-connector-c
           [ -f distinfo ] || { sudo make makesum; cat distinfo; }
-          sudo make package
-          cp /usr/ports/packages/amd64/all/mariadb-connector-c-*.tgz $ws/
+          sudo make package $mkargs
+          cp /usr/ports/packages/amd64/all/${{ steps.check.outputs.asset }} $ws/
+          ls -l $ws/${{ steps.check.outputs.asset }}
 
       - name: Release
         if: steps.check.outputs.exists != 'true'
@@ -132,5 +160,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload mariadb-connector-c-${{ env.MARIADB_CONNECTOR }}-openbsd-${{ env.OPENBSD }} \
-            mariadb-connector-c-*.tgz --repo "$GITHUB_REPOSITORY"
+          gh release create "${{ steps.check.outputs.tag }}" ${{ steps.check.outputs.asset }} \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "mariadb-connector-c ${{ steps.check.outputs.version }} package (OpenBSD ${{ env.OPENBSD }})" \
+            --notes "Built from ports/databases/mariadb-connector-c at $GITHUB_SHA. Install with: pkg_add -D unsigned ./${{ steps.check.outputs.asset }}"
