@@ -1,7 +1,7 @@
 COMMENT=	distributed memory object caching system
 
 DISTNAME=	memcached-1.6.42
-REVISION=	1
+REVISION=	2
 CATEGORIES=	misc
 
 # https://github.com/memcached/memcached
