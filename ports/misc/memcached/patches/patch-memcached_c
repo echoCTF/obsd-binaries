@@ -12,6 +12,15 @@ Index: memcached.c
      APPEND_STAT("ssl_verify_mode", "%d", settings.ssl_verify_mode);
      APPEND_STAT("ssl_keyformat", "%d", settings.ssl_keyformat);
      APPEND_STAT("ssl_ciphers", "%s", settings.ssl_ciphers ? settings.ssl_ciphers : "NULL");
+@@ -1989,7 +1989,7 @@
+     APPEND_STAT("proxy_uring_enabled", "%s", settings.proxy_uring ? "yes" : "no");
+ #endif
+     APPEND_STAT("num_napi_ids", "%d", settings.num_napi_ids);
+-    APPEND_STAT("memory_file", "%s", settings.memory_file);
++    APPEND_STAT("memory_file", "%s", settings.memory_file ? settings.memory_file : "NULL");
+     APPEND_STAT("client_flags_size", "%d", sizeof(client_flags_t));
+ }
+ 
 @@ -5554,8 +5554,8 @@
                  start_lru_maintainer = false;
                  break;
