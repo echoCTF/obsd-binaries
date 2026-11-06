@@ -1,4 +1,5 @@
 name: mariadb-connector-c
+name: libs
 
 on:
   workflow_dispatch:
@@ -9,7 +10,7 @@ on:
         default: "3.4.11"
         type: string
       revision:
-        description: "REVISION (pN suffix) used in both release tags and the package name. Leave empty to use the REVISION from the port Makefile."
+        description: "REVISION (e.g. 0 or p0) used in both release tags and the package name. Leave empty to use the REVISION from the port Makefile."
         required: false
         default: ""
         type: string
@@ -40,7 +41,7 @@ jobs:
           # Same revision as the package job: the input, or else the REVISION
           # from the port Makefile. Read through the API because this job
           # checks out the upstream repo, not ours.
-          r=$INPUT_REVISION
+          r=${INPUT_REVISION#p}
           if [ -n "$r" ]; then
             if ! [[ "$r" =~ ^[0-9]+$ ]]; then
               echo "revision must be a non-negative integer, got: $r" >&2
@@ -122,12 +123,13 @@ jobs:
           mk=ports/databases/mariadb-connector-c/Makefile
           v=$(awk '/^GH_TAGNAME[ \t]*=/ {sub(/^v/, "", $3); print $3}' $mk)
           r=$(awk '/^REVISION[ \t]*=/ {print $3}' $mk)
+          INPUT_REVISION=${INPUT_REVISION#p}
           if [ -n "$INPUT_REVISION" ]; then
             if ! [[ "$INPUT_REVISION" =~ ^[0-9]+$ ]]; then
               echo "revision must be a non-negative integer, got: $INPUT_REVISION" >&2
               exit 1
             fi
-            r=$INPUT_REVISION
+            r=${INPUT_REVISION#p}
           fi
           [ -n "$r" ] && v="${v}p${r}"
           tag=mariadb-connector-c-$v-openbsd-${{ env.OPENBSD }}-pkg
