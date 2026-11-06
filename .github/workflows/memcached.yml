@@ -13,7 +13,7 @@ on:
           - "7.9"
           - "8.0"
       revision:
-        description: "Package REVISION (pN suffix). Leave empty to use the REVISION from the port Makefile."
+        description: "Package REVISION, e.g. 0 or p0. Leave empty to use the REVISION from the port Makefile."
         required: false
         default: ""
         type: string
@@ -49,12 +49,13 @@ jobs:
           mk=ports/misc/memcached/Makefile
           v=$(awk '/^DISTNAME=/ {sub(/^memcached-/, "", $2); print $2}' $mk)
           r=$(awk '/^REVISION=/ {print $2}' $mk)
+          INPUT_REVISION=${INPUT_REVISION#p}
           if [ -n "$INPUT_REVISION" ]; then
             if ! [[ "$INPUT_REVISION" =~ ^[0-9]+$ ]]; then
               echo "revision must be a non-negative integer, got: $INPUT_REVISION" >&2
               exit 1
             fi
-            r=$INPUT_REVISION
+            r=${INPUT_REVISION#p}
           fi
           [ -n "$r" ] && v="${v}p${r}"
           tag=memcached-$v-openbsd-${{ matrix.openbsd }}
