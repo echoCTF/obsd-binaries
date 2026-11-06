@@ -12,6 +12,11 @@ on:
           - all
           - "7.9"
           - "8.0"
+      revision:
+        description: "Package REVISION (pN suffix). Leave empty to use the REVISION from the port Makefile."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -39,14 +44,24 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_REVISION: ${{ inputs.revision }}
         run: |
           mk=ports/misc/memcached/Makefile
           v=$(awk '/^DISTNAME=/ {sub(/^memcached-/, "", $2); print $2}' $mk)
           r=$(awk '/^REVISION=/ {print $2}' $mk)
+          if [ -n "$INPUT_REVISION" ]; then
+            if ! [[ "$INPUT_REVISION" =~ ^[0-9]+$ ]]; then
+              echo "revision must be a non-negative integer, got: $INPUT_REVISION" >&2
+              exit 1
+            fi
+            r=$INPUT_REVISION
+          fi
           [ -n "$r" ] && v="${v}p${r}"
           tag=memcached-$v-openbsd-${{ matrix.openbsd }}
           echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "revision=$r" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "asset=memcached-$v.tgz" >> "$GITHUB_OUTPUT"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             echo "release $tag exists, skipping"
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -64,6 +79,9 @@ jobs:
         run: |
           set -e
           ws=$PWD
+          rev="${{ steps.check.outputs.revision }}"
+          mkargs=""
+          [ -n "$rev" ] && mkargs="REVISION=$rev"
           sudo pkg_add libevent
           url=$(cat /etc/installurl)/$(uname -r)
           cd /tmp
@@ -75,9 +93,9 @@ jobs:
           sudo rm -rf /usr/ports/mystuff/misc/memcached
           sudo cp -R $ws/ports/misc/memcached /usr/ports/mystuff/misc/
           cd /usr/ports/mystuff/misc/memcached
-          sudo make package
-          cp /usr/ports/packages/amd64/all/memcached-*.tgz $ws/
-          ls -l $ws/memcached-*.tgz
+          sudo make package $mkargs
+          cp /usr/ports/packages/amd64/all/${{ steps.check.outputs.asset }} $ws/
+          ls -l $ws/${{ steps.check.outputs.asset }}
 
       - name: Release
         if: steps.check.outputs.exists != 'true'
@@ -85,7 +103,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.check.outputs.tag }}" memcached-*.tgz \
+          gh release create "${{ steps.check.outputs.tag }}" ${{ steps.check.outputs.asset }} \
             --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "memcached ${{ steps.check.outputs.version }} (OpenBSD ${{ matrix.openbsd }})" \
-            --notes "Built from ports/misc/memcached at $GITHUB_SHA. Install with: pkg_add -D unsigned ./memcached-${{ steps.check.outputs.version }}.tgz"
+            --notes "Built from ports/misc/memcached at $GITHUB_SHA. Install with: pkg_add -D unsigned ./${{ steps.check.outputs.asset }}"
