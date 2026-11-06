@@ -12,6 +12,11 @@ on:
           - all
           - "7.9"
           - "8.0"
+      revision:
+        description: "Package REVISION (pN suffix). Leave empty to use the REVISION from the port Makefile."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -39,15 +44,26 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          INPUT_REVISION: ${{ inputs.revision }}
         run: |
           mk=ports/databases/memcached_functions_mysql/Makefile
           v=$(awk '/^DISTNAME[ \t]*=/ {sub(/^memcached_functions_mysql-/, "", $3); print $3}' $mk)
           r=$(awk '/^REVISION[ \t]*=/ {print $3}' $mk)
+          if [ -n "$INPUT_REVISION" ]; then
+            if ! [[ "$INPUT_REVISION" =~ ^[0-9]+$ ]]; then
+              echo "revision must be a non-negative integer, got: $INPUT_REVISION" >&2
+              exit 1
+            fi
+            r=$INPUT_REVISION
+          fi
           [ -n "$r" ] && v="${v}p${r}"
           tag=memcached_functions_mysql-$v-openbsd-${{ matrix.openbsd }}
           echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "revision=$r" >> "$GITHUB_OUTPUT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "asset=$tag-amd64.tgz" >> "$GITHUB_OUTPUT"
+          # The asset must keep the package's own name, or pkg_add rejects it
+          # with "Package name is not consistent". The tag carries the OpenBSD version.
+          echo "asset=memcached_functions_mysql-$v.tgz" >> "$GITHUB_OUTPUT"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             echo "release $tag exists, skipping"
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -65,6 +81,9 @@ jobs:
         run: |
           set -e
           ws=$PWD
+          rev="${{ steps.check.outputs.revision }}"
+          mkargs=""
+          [ -n "$rev" ] && mkargs="REVISION=$rev"
           sudo pkg_add autoconf%2.72 automake%1.17 metaauto libtool gmake libmemcached mariadb-client
           url=$(cat /etc/installurl)/$(uname -r)
           cd /tmp
@@ -77,7 +96,7 @@ jobs:
           sudo cp -R $ws/ports/databases/memcached_functions_mysql /usr/ports/mystuff/databases/
           cd /usr/ports/mystuff/databases/memcached_functions_mysql
           [ -f distinfo ] || { sudo make makesum; cat distinfo; }
-          sudo make package
+          sudo make package $mkargs
           cp /usr/ports/packages/amd64/all/memcached_functions_mysql-${{ steps.check.outputs.version }}.tgz \
             $ws/${{ steps.check.outputs.asset }}
           ls -l $ws/${{ steps.check.outputs.asset }}
